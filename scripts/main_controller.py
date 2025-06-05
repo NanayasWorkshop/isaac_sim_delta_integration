@@ -78,7 +78,7 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
                 print("Sphere creation failed")
                 return
             
-            # Extract initial connection points
+            # Extract initial connection points and visualize them
             self.extract_and_print_connection_points()
             
             # Start monitoring
@@ -160,7 +160,7 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
             # Initialize last position on first run
             if self.sphere_manager.last_position is None:
                 self.sphere_manager.update_last_position(current_pos)
-                # Move robot to initial position and extract connection points
+                # Move robot to initial position and extract connection points (with visualization)
                 self.move_robot_to_target(current_pos)
                 self.extract_and_print_connection_points(current_pos)
                 return
@@ -171,7 +171,7 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
                 success = self.move_robot_to_target(current_pos)
                 if success:
                     self.sphere_manager.update_last_position(current_pos)
-                    # Update connection points with new target
+                    # Update connection points with new target (automatically visualizes)
                     self.extract_and_print_connection_points(current_pos)
         
         except Exception as e:
@@ -195,12 +195,13 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
             self.current_fabrik_joints, self.current_segment_end_effectors = \
                 self.fabrik_interface.extract_visualization_data(result)
             
-            # Update debug visualization
+            # Update debug visualization with combined FABRIK and connection points
             if self.debug_visualizer.is_enabled():
-                self.debug_visualizer.visualize_fabrik_data(
+                self.debug_visualizer.visualize_fabrik_and_connections(
                     self.current_fabrik_joints,
                     self.current_segment_end_effectors,
-                    self.current_target
+                    self.current_target,
+                    self.current_connection_points
                 )
             
             # Move robot using FABRIK result
@@ -254,6 +255,7 @@ def main():
     print("   5. Use move_sphere_to(x, y, z) for manual testing")
     print("   6. Use extract_connection_points() to manually extract points")
     print("   Debug: GREEN=segments | BLUE=FABRIK | YELLOW=target | RED=base")
+    print("   Connection Points: PURPLE=inter-segments | ORANGE=extensions")
     print(f"   Movement threshold: {0.005*1000:.1f}mm")
 
 # Print instructions when module is loaded
@@ -269,4 +271,5 @@ print("   3. Press PLAY to start system")
 print("   4. Move blue sphere to control robot")
 print("   5. Use move_sphere_to(x, y, z) for manual testing")
 print("   Debug: GREEN=segments | BLUE=FABRIK | YELLOW=target | RED=base")
+print("   Connection Points: PURPLE=inter-segments | ORANGE=extensions")
 print(f"   Movement threshold: {0.005*1000:.1f}mm")

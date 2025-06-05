@@ -32,13 +32,14 @@ class DebugVisualizer:
         self.available = False
         self.setup_debug_draw()
         
-        # Colors (RGBA format)
+        # Colors (RGBA format) - Enhanced for better visibility
         self.GREEN = (0.0, 1.0, 0.0, 1.0)   # Segment end-effectors
         self.BLUE = (0.0, 0.5, 1.0, 1.0)    # FABRIK joints
         self.YELLOW = (1.0, 1.0, 0.0, 1.0)  # Target
         self.RED = (1.0, 0.0, 0.0, 1.0)     # Base
-        self.PURPLE = (1.0, 0.0, 1.0, 1.0)  # Connection points
-        self.ORANGE = (1.0, 0.5, 0.0, 1.0)  # Extension points
+        self.PURPLE = (0.8, 0.0, 1.0, 1.0)  # Connection points (brighter purple)
+        self.ORANGE = (1.0, 0.6, 0.0, 1.0)  # Extension points (brighter orange)
+        self.CYAN = (0.0, 1.0, 1.0, 1.0)    # Alternative connection color
     
     def setup_debug_draw(self):
         """Initialize debug drawing system"""
@@ -170,7 +171,7 @@ class DebugVisualizer:
             print(f"Error updating debug visualization: {e}")
     
     def visualize_connection_points(self, connection_points):
-        """Visualize connection points"""
+        """Visualize connection points with enhanced visibility"""
         if not self.enabled or not self.available or not self.debug_draw or not connection_points:
             return
         
@@ -183,28 +184,32 @@ class DebugVisualizer:
             for name, point in connection_points:
                 if "base_extension" in name:
                     base_extensions.append(list(point))
-                elif "extension" in name:
+                elif "end_extension" in name:
                     end_extensions.append(list(point))
                 else:
                     inter_connections.append(list(point))
             
-            # Draw base extensions (ORANGE)
+            # Draw base extensions (ORANGE) - larger size for visibility
             if base_extensions:
-                self.debug_draw.draw_points(base_extensions, [self.ORANGE] * len(base_extensions), [12.0] * len(base_extensions))
+                self.debug_draw.draw_points(base_extensions, [self.ORANGE] * len(base_extensions), [16.0] * len(base_extensions))
+                print(f"Drawing {len(base_extensions)} base extension points")
             
-            # Draw inter-segment connections (PURPLE)
+            # Draw inter-segment connections (PURPLE) - larger size for visibility
             if inter_connections:
-                self.debug_draw.draw_points(inter_connections, [self.PURPLE] * len(inter_connections), [10.0] * len(inter_connections))
+                self.debug_draw.draw_points(inter_connections, [self.PURPLE] * len(inter_connections), [14.0] * len(inter_connections))
+                print(f"Drawing {len(inter_connections)} inter-segment connection points")
             
-            # Draw end extensions (ORANGE)
+            # Draw end extensions (CYAN) - different color for end extensions
             if end_extensions:
-                self.debug_draw.draw_points(end_extensions, [self.ORANGE] * len(end_extensions), [12.0] * len(end_extensions))
+                self.debug_draw.draw_points(end_extensions, [self.CYAN] * len(end_extensions), [16.0] * len(end_extensions))
+                print(f"Drawing {len(end_extensions)} end extension points")
             
-            # Draw connecting lines between connection points
+            # Draw connecting lines between connection points - thicker lines
             all_points = base_extensions + inter_connections + end_extensions
             if len(all_points) > 1:
                 for i in range(len(all_points) - 1):
-                    self.debug_draw.draw_lines([all_points[i]], [all_points[i + 1]], [self.PURPLE], [2.0])
+                    self.debug_draw.draw_lines([all_points[i]], [all_points[i + 1]], [self.PURPLE], [4.0])
+                print(f"Drawing {len(all_points)-1} connection lines")
             
         except Exception as e:
             print(f"Error visualizing connection points: {e}")
@@ -217,11 +222,83 @@ class DebugVisualizer:
         try:
             self.clear_all()
             
-            # First draw FABRIK data
-            self.visualize_fabrik_data(fabrik_joints, segment_end_effectors, target_position)
+            # Draw target point first
+            if target_position:
+                target_pos = list(target_position)
+                self.debug_draw.draw_points([target_pos], [self.YELLOW], [18.0])  # Larger target
             
-            # Then draw connection points on top
-            self.visualize_connection_points(connection_points)
+            # Draw FABRIK joint chain (BLUE)
+            if len(fabrik_joints) > 1:
+                # Draw connecting lines
+                for i in range(len(fabrik_joints) - 1):
+                    start_pos = list(fabrik_joints[i])
+                    end_pos = list(fabrik_joints[i + 1])
+                    self.debug_draw.draw_lines([start_pos], [end_pos], [self.BLUE], [3.0])
+                
+                # Draw joint points
+                joint_positions = [list(pos) for pos in fabrik_joints]
+                joint_sizes = [8.0] * len(joint_positions)
+                joint_colors = [self.BLUE] * len(joint_positions)
+                
+                if len(joint_colors) > 0:
+                    joint_colors[0] = self.RED  # Base
+                if len(joint_colors) > 1:
+                    joint_colors[-1] = self.YELLOW  # Final joint
+                
+                self.debug_draw.draw_points(joint_positions, joint_colors, joint_sizes)
+            
+            # Draw segment end-effector chain (GREEN)
+            if len(segment_end_effectors) > 1:
+                # Draw connecting lines
+                for i in range(len(segment_end_effectors) - 1):
+                    start_pos = list(segment_end_effectors[i])
+                    end_pos = list(segment_end_effectors[i + 1])
+                    self.debug_draw.draw_lines([start_pos], [end_pos], [self.GREEN], [4.0])
+                
+                # Draw segment points
+                seg_positions = [list(pos) for pos in segment_end_effectors]
+                seg_sizes = [10.0] * len(seg_positions)
+                seg_colors = [self.GREEN] * len(seg_positions)
+                
+                if len(seg_colors) > 0:
+                    seg_colors[0] = self.RED  # Base
+                
+                self.debug_draw.draw_points(seg_positions, seg_colors, seg_sizes)
+            
+            # Draw connection points on top with enhanced visibility
+            if connection_points:
+                # Separate different types of connection points
+                base_extensions = []
+                inter_connections = []
+                end_extensions = []
+                
+                for name, point in connection_points:
+                    if "base_extension" in name:
+                        base_extensions.append(list(point))
+                    elif "end_extension" in name:
+                        end_extensions.append(list(point))
+                    else:
+                        inter_connections.append(list(point))
+                
+                # Draw base extensions (ORANGE)
+                if base_extensions:
+                    self.debug_draw.draw_points(base_extensions, [self.ORANGE] * len(base_extensions), [16.0] * len(base_extensions))
+                
+                # Draw inter-segment connections (PURPLE)
+                if inter_connections:
+                    self.debug_draw.draw_points(inter_connections, [self.PURPLE] * len(inter_connections), [14.0] * len(inter_connections))
+                
+                # Draw end extensions (CYAN)
+                if end_extensions:
+                    self.debug_draw.draw_points(end_extensions, [self.CYAN] * len(end_extensions), [16.0] * len(end_extensions))
+                
+                # Draw connecting lines between connection points
+                all_connection_points = base_extensions + inter_connections + end_extensions
+                if len(all_connection_points) > 1:
+                    for i in range(len(all_connection_points) - 1):
+                        self.debug_draw.draw_lines([all_connection_points[i]], [all_connection_points[i + 1]], [self.PURPLE], [4.0])
+            
+            print("Combined FABRIK and connection points visualization updated")
             
         except Exception as e:
             print(f"Error in combined visualization: {e}")
