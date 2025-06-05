@@ -1,6 +1,5 @@
-import omni.usd
-from pxr import UsdGeom
 import math
+from isaac_utils import get_stage_and_robot, get_link_world_position, search_for_link
 
 class ConnectionPointExtractor:
     def __init__(self, robot_path):
@@ -10,20 +9,6 @@ class ConnectionPointExtractor:
         self.connection_points = []
         self._cached_positions = {}  # Cache for positions
         
-    def _get_stage_and_robot(self):
-        """Get stage and robot prim with error checking"""
-        stage = omni.usd.get_context().get_stage()
-        if not stage:
-            print("No USD stage available")
-            return None, None
-        
-        robot_prim = stage.GetPrimAtPath(self.robot_path)
-        if not robot_prim or not robot_prim.IsValid():
-            print(f"Robot not found at path: {self.robot_path}")
-            return None, None
-        
-        return stage, robot_prim
-    
     def _scan_for_segments(self, prim, segments):
         """Recursively scan for segment links"""
         prim_name = prim.GetName()
@@ -41,7 +26,7 @@ class ConnectionPointExtractor:
     def scan_robot_structure(self):
         """Scan the robot to find segments and links"""
         try:
-            stage, robot_prim = self._get_stage_and_robot()
+            stage, robot_prim = get_stage_and_robot(self.robot_path)
             if not stage or not robot_prim:
                 return False
             
@@ -56,70 +41,42 @@ class ConnectionPointExtractor:
             print(f"Error scanning robot structure: {e}")
             return False
     
-    def get_link_world_position(self, link_path):
+    def get_link_world_position_cached(self, link_path):
         """Get world position of a link with caching"""
         # Check cache first
         if link_path in self._cached_positions:
             return self._cached_positions[link_path]
         
-        try:
-            stage = omni.usd.get_context().get_stage()
-            if not stage:
-                return None
-            
-            prim = stage.GetPrimAtPath(link_path)
-            if not prim or not prim.IsValid():
-                print(f"Link not found: {link_path}")
-                return None
-                
-            xformable = UsdGeom.Xformable(prim)
-            world_transform = xformable.ComputeLocalToWorldTransform(0)
-            translation = world_transform.ExtractTranslation()
-            
-            position = (float(translation[0]), float(translation[1]), float(translation[2]))
+        position = get_link_world_position(link_path)
+        if position:
             self._cached_positions[link_path] = position  # Cache the result
-            return position
-            
-        except Exception as e:
-            print(f"Error getting position for {link_path}: {e}")
-            return None
+        return position
     
     def find_link_in_robot(self, link_name):
         """Find a link anywhere in the robot hierarchy"""
         try:
-            stage, robot_prim = self._get_stage_and_robot()
+            stage, robot_prim = get_stage_and_robot(self.robot_path)
             if not stage or not robot_prim:
                 return None
             
-            return self._search_for_link(robot_prim, link_name)
+            return search_for_link(robot_prim, link_name)
             
         except Exception as e:
             print(f"Error finding link {link_name}: {e}")
             return None
     
-    def _search_for_link(self, prim, target_name):
-        """Recursively search for a link by name"""
-        if prim.GetName() == target_name:
-            return str(prim.GetPath())
-        
-        for child in prim.GetChildren():
-            result = self._search_for_link(child, target_name)
-            if result:
-                return result
-        return None
-    
     def calculate_base_distance(self):
         """Calculate distance from robot base to seg1_link1"""
         try:
             # Get positions
-            base_pos = self.get_link_world_position(self.robot_path)
+            base_pos = get_link_world_position(self.robot_path)
             seg1_link1_path = self.find_link_in_robot("seg1_link1")
             
             if not base_pos or not seg1_link1_path:
                 print("Could not get required positions for base distance calculation")
                 return False
             
-            seg1_link1_pos = self.get_link_world_position(seg1_link1_path)
+            seg1_link1_pos = get_link_world_position(seg1_link1_path)
             if not seg1_link1_pos:
                 return False
             
@@ -167,9 +124,9 @@ class ConnectionPointExtractor:
         
         try:
             # Get base positions
-            base_pos = self.get_link_world_position(self.robot_path)
+            base_pos = get_link_world_position(self.robot_path)
             seg1_link1_path = self.find_link_in_robot("seg1_link1")
-            seg1_link1_pos = self.get_link_world_position(seg1_link1_path)
+            seg1_link1_pos = get_link_world_position(seg1_link1_path)
             
             if not base_pos or not seg1_link1_pos:
                 return []
@@ -187,8 +144,8 @@ class ConnectionPointExtractor:
                 segN_link6_path = self.find_link_in_robot(f"seg{seg_num}_link6")
                 segNext_link1_path = self.find_link_in_robot(f"seg{seg_num+1}_link1")
                 
-                segN_link6_pos = self.get_link_world_position(segN_link6_path)
-                segNext_link1_pos = self.get_link_world_position(segNext_link1_path)
+                segN_link6_pos = get_link_world_position(segN_link6_path)
+                segNext_link1_pos = get_link_world_position(segNext_link1_path)
                 
                 if segN_link6_pos and segNext_link1_pos:
                     # Calculate midpoint
@@ -202,7 +159,7 @@ class ConnectionPointExtractor:
             
             # 3. End-effector extension point
             last_seg_link6_path = self.find_link_in_robot(f"seg{self.segments_found}_link6")
-            last_seg_link6_pos = self.get_link_world_position(last_seg_link6_path)
+            last_seg_link6_pos = get_link_world_position(last_seg_link6_path)
             
             if last_seg_link6_pos:
                 if target_position:
@@ -212,7 +169,7 @@ class ConnectionPointExtractor:
                 else:
                     # Extend in current orientation (link5 to link6 direction)
                     last_seg_link5_path = self.find_link_in_robot(f"seg{self.segments_found}_link5")
-                    last_seg_link5_pos = self.get_link_world_position(last_seg_link5_path)
+                    last_seg_link5_pos = get_link_world_position(last_seg_link5_path)
                     
                     if last_seg_link5_pos:
                         direction = self._calculate_direction(last_seg_link5_pos, last_seg_link6_pos)

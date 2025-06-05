@@ -143,3 +143,72 @@ def list_children(prim_path):
         children.append(str(child.GetPath()))
     
     return children
+
+# CONSOLIDATED FUNCTIONS FROM connection_points.py and sphere_manager.py
+
+def get_stage_and_robot(robot_path):
+    """Get stage and robot prim with error checking"""
+    stage = omni.usd.get_context().get_stage()
+    if not stage:
+        print("No USD stage available")
+        return None, None
+    
+    robot_prim = stage.GetPrimAtPath(robot_path)
+    if not robot_prim or not robot_prim.IsValid():
+        print(f"Robot not found at path: {robot_path}")
+        return None, None
+    
+    return stage, robot_prim
+
+def get_link_world_position(link_path):
+    """Get world position of a link"""
+    try:
+        stage = omni.usd.get_context().get_stage()
+        if not stage:
+            return None
+        
+        prim = stage.GetPrimAtPath(link_path)
+        if not prim or not prim.IsValid():
+            print(f"Link not found: {link_path}")
+            return None
+            
+        xformable = UsdGeom.Xformable(prim)
+        world_transform = xformable.ComputeLocalToWorldTransform(0)
+        translation = world_transform.ExtractTranslation()
+        
+        return (float(translation[0]), float(translation[1]), float(translation[2]))
+        
+    except Exception as e:
+        print(f"Error getting position for {link_path}: {e}")
+        return None
+
+def search_for_link(prim, target_name):
+    """Recursively search for a link by name"""
+    if prim.GetName() == target_name:
+        return str(prim.GetPath())
+    
+    for child in prim.GetChildren():
+        result = search_for_link(child, target_name)
+        if result:
+            return result
+    return None
+
+def get_sphere_position(sphere_path):
+    """Get current sphere position"""
+    try:
+        stage = omni.usd.get_context().get_stage()
+        if not stage:
+            return None
+        
+        prim = stage.GetPrimAtPath(sphere_path)
+        if not prim or not prim.IsValid():
+            return None
+            
+        xformable = UsdGeom.Xformable(prim)
+        world_transform = xformable.ComputeLocalToWorldTransform(0)
+        translation = world_transform.ExtractTranslation()
+        
+        return (float(translation[0]), float(translation[1]), float(translation[2]))
+        
+    except Exception:
+        return None
