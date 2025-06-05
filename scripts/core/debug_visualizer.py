@@ -48,7 +48,37 @@ class DebugVisualizer:
                 self.available = True
                 print("Debug draw interface ready")
             except Exception as e:
-            print(f"Error in combined visualization: {e}")
+                print(f"Error setting up debug draw interface: {e}")
+                self.debug_draw = None
+                self.available = False
+        else:
+            print("Debug draw not available")
+            self.debug_draw = None
+            self.available = False
+    
+    def is_available(self):
+        """Check if debug drawing is available"""
+        return self.available
+    
+    def is_enabled(self):
+        """Check if debug visualization is enabled"""
+        return self.enabled
+    
+    def toggle(self):
+        """Toggle debug visualization on/off"""
+        self.enabled = not self.enabled
+        if not self.enabled:
+            self.clear_all()
+        print(f"Debug visualization: {'ON' if self.enabled else 'OFF'}")
+    
+    def clear_all(self):
+        """Clear all debug visualization"""
+        if self.debug_draw and self.available:
+            try:
+                self.debug_draw.clear_lines()
+                self.debug_draw.clear_points()
+            except Exception as e:
+                print(f"Error clearing debug visualization: {e}")
     
     def draw_custom_points(self, positions, colors=None, sizes=None):
         """Draw custom points"""
@@ -83,38 +113,7 @@ class DebugVisualizer:
             self.debug_draw.draw_lines(start_pos, end_pos, colors, widths)
             
         except Exception as e:
-            print(f"Error drawing custom lines: {e}") as e:
-                print(f"Error setting up debug draw interface: {e}")
-                self.debug_draw = None
-                self.available = False
-        else:
-            print("Debug draw not available")
-            self.debug_draw = None
-            self.available = False
-    
-    def is_available(self):
-        """Check if debug drawing is available"""
-        return self.available
-    
-    def is_enabled(self):
-        """Check if debug visualization is enabled"""
-        return self.enabled
-    
-    def toggle(self):
-        """Toggle debug visualization on/off"""
-        self.enabled = not self.enabled
-        if not self.enabled:
-            self.clear_all()
-        print(f"Debug visualization: {'ON' if self.enabled else 'OFF'}")
-    
-    def clear_all(self):
-        """Clear all debug visualization"""
-        if self.debug_draw and self.available:
-            try:
-                self.debug_draw.clear_lines()
-                self.debug_draw.clear_points()
-            except Exception as e:
-                print(f"Error clearing debug visualization: {e}")
+            print(f"Error drawing custom lines: {e}")
     
     def visualize_fabrik_data(self, fabrik_joints, segment_end_effectors, target_position):
         """Update debug visualization using Isaac Sim debug draw"""
@@ -224,4 +223,5 @@ class DebugVisualizer:
             # Then draw connection points on top
             self.visualize_connection_points(connection_points)
             
-        except Exception
+        except Exception as e:
+            print(f"Error in combined visualization: {e}")
