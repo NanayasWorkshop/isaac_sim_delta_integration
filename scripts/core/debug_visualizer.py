@@ -37,6 +37,8 @@ class DebugVisualizer:
         self.BLUE = (0.0, 0.5, 1.0, 1.0)    # FABRIK joints
         self.YELLOW = (1.0, 1.0, 0.0, 1.0)  # Target
         self.RED = (1.0, 0.0, 0.0, 1.0)     # Base
+        self.PURPLE = (1.0, 0.0, 1.0, 1.0)  # Connection points
+        self.ORANGE = (1.0, 0.5, 0.0, 1.0)  # Extension points
     
     def setup_debug_draw(self):
         """Initialize debug drawing system"""
@@ -46,6 +48,42 @@ class DebugVisualizer:
                 self.available = True
                 print("Debug draw interface ready")
             except Exception as e:
+            print(f"Error in combined visualization: {e}")
+    
+    def draw_custom_points(self, positions, colors=None, sizes=None):
+        """Draw custom points"""
+        if not self.enabled or not self.available or not self.debug_draw:
+            return
+        
+        try:
+            if colors is None:
+                colors = [self.BLUE] * len(positions)
+            if sizes is None:
+                sizes = [8.0] * len(positions)
+            
+            point_positions = [list(pos) for pos in positions]
+            self.debug_draw.draw_points(point_positions, colors, sizes)
+            
+        except Exception as e:
+            print(f"Error drawing custom points: {e}")
+    
+    def draw_custom_lines(self, start_positions, end_positions, colors=None, widths=None):
+        """Draw custom lines"""
+        if not self.enabled or not self.available or not self.debug_draw:
+            return
+        
+        try:
+            if colors is None:
+                colors = [self.BLUE] * len(start_positions)
+            if widths is None:
+                widths = [3.0] * len(start_positions)
+            
+            start_pos = [list(pos) for pos in start_positions]
+            end_pos = [list(pos) for pos in end_positions]
+            self.debug_draw.draw_lines(start_pos, end_pos, colors, widths)
+            
+        except Exception as e:
+            print(f"Error drawing custom lines: {e}") as e:
                 print(f"Error setting up debug draw interface: {e}")
                 self.debug_draw = None
                 self.available = False
@@ -132,37 +170,58 @@ class DebugVisualizer:
         except Exception as e:
             print(f"Error updating debug visualization: {e}")
     
-    def draw_custom_points(self, positions, colors=None, sizes=None):
-        """Draw custom points"""
-        if not self.enabled or not self.available or not self.debug_draw:
+    def visualize_connection_points(self, connection_points):
+        """Visualize connection points"""
+        if not self.enabled or not self.available or not self.debug_draw or not connection_points:
             return
         
         try:
-            if colors is None:
-                colors = [self.BLUE] * len(positions)
-            if sizes is None:
-                sizes = [8.0] * len(positions)
+            # Separate different types of connection points
+            base_extensions = []
+            inter_connections = []
+            end_extensions = []
             
-            point_positions = [list(pos) for pos in positions]
-            self.debug_draw.draw_points(point_positions, colors, sizes)
+            for name, point in connection_points:
+                if "base_extension" in name:
+                    base_extensions.append(list(point))
+                elif "extension" in name:
+                    end_extensions.append(list(point))
+                else:
+                    inter_connections.append(list(point))
+            
+            # Draw base extensions (ORANGE)
+            if base_extensions:
+                self.debug_draw.draw_points(base_extensions, [self.ORANGE] * len(base_extensions), [12.0] * len(base_extensions))
+            
+            # Draw inter-segment connections (PURPLE)
+            if inter_connections:
+                self.debug_draw.draw_points(inter_connections, [self.PURPLE] * len(inter_connections), [10.0] * len(inter_connections))
+            
+            # Draw end extensions (ORANGE)
+            if end_extensions:
+                self.debug_draw.draw_points(end_extensions, [self.ORANGE] * len(end_extensions), [12.0] * len(end_extensions))
+            
+            # Draw connecting lines between connection points
+            all_points = base_extensions + inter_connections + end_extensions
+            if len(all_points) > 1:
+                for i in range(len(all_points) - 1):
+                    self.debug_draw.draw_lines([all_points[i]], [all_points[i + 1]], [self.PURPLE], [2.0])
             
         except Exception as e:
-            print(f"Error drawing custom points: {e}")
+            print(f"Error visualizing connection points: {e}")
     
-    def draw_custom_lines(self, start_positions, end_positions, colors=None, widths=None):
-        """Draw custom lines"""
+    def visualize_fabrik_and_connections(self, fabrik_joints, segment_end_effectors, target_position, connection_points):
+        """Combined visualization of FABRIK data and connection points"""
         if not self.enabled or not self.available or not self.debug_draw:
             return
         
         try:
-            if colors is None:
-                colors = [self.BLUE] * len(start_positions)
-            if widths is None:
-                widths = [3.0] * len(start_positions)
+            self.clear_all()
             
-            start_pos = [list(pos) for pos in start_positions]
-            end_pos = [list(pos) for pos in end_positions]
-            self.debug_draw.draw_lines(start_pos, end_pos, colors, widths)
+            # First draw FABRIK data
+            self.visualize_fabrik_data(fabrik_joints, segment_end_effectors, target_position)
             
-        except Exception as e:
-            print(f"Error drawing custom lines: {e}")
+            # Then draw connection points on top
+            self.visualize_connection_points(connection_points)
+            
+        except Exception

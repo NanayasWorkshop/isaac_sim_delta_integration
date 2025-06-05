@@ -22,6 +22,7 @@ from core.sphere_manager import SphereManager
 from core.robot_controller import RobotController
 from core.fabrik_interface import FABRIKInterface
 from core.debug_visualizer import DebugVisualizer
+from core.connection_points import ConnectionPointExtractor
 
 class SphereFollowingRobotWithDebug(BehaviorScript):
     def on_init(self):
@@ -32,6 +33,7 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
         self.robot_controller = RobotController()
         self.fabrik_interface = FABRIKInterface()  # UPDATE PATH HERE IF NEEDED
         self.debug_visualizer = DebugVisualizer()
+        self.connection_extractor = ConnectionPointExtractor()
         
         # Movement threshold (0.5cm = 0.005m)
         self.movement_threshold = 0.005
@@ -44,6 +46,7 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
         self.current_fabrik_joints = []
         self.current_segment_end_effectors = []
         self.current_target = None
+        self.current_connection_points = []
     
     def on_play(self):
         print("Starting modular robot system...")
@@ -65,6 +68,9 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
             if not success:
                 print("Sphere creation failed")
                 return
+            
+            # Extract initial connection points
+            self.extract_and_print_connection_points()
             
             # Start monitoring
             self.start_monitoring()
@@ -90,6 +96,21 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
             self.cleanup()
         except Exception as e:
             print(f"Error during destroy: {e}")
+    
+    def extract_and_print_connection_points(self, target_position=None):
+        """Extract and print connection points"""
+        try:
+            if target_position is None:
+                target_position = self.sphere_manager.get_position()
+            
+            self.current_connection_points = self.connection_extractor.extract_all_connection_points(target_position)
+            self.connection_extractor.print_all_points()
+            
+            return self.current_connection_points
+            
+        except Exception as e:
+            print(f"Error extracting connection points: {e}")
+            return []
     
     def start_monitoring(self):
         """Start monitoring sphere position"""
@@ -130,8 +151,9 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
             # Initialize last position on first run
             if self.sphere_manager.last_position is None:
                 self.sphere_manager.update_last_position(current_pos)
-                # Move robot to initial position
+                # Move robot to initial position and extract connection points
                 self.move_robot_to_target(current_pos)
+                self.extract_and_print_connection_points(current_pos)
                 return
             
             # Check if sphere moved enough to trigger robot movement
@@ -140,6 +162,8 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
                 success = self.move_robot_to_target(current_pos)
                 if success:
                     self.sphere_manager.update_last_position(current_pos)
+                    # Update connection points with new target
+                    self.extract_and_print_connection_points(current_pos)
         
         except Exception as e:
             print(f"Error in monitoring loop: {e}")
@@ -183,6 +207,14 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
         """Toggle debug visualization on/off"""
         self.debug_visualizer.toggle()
     
+    def manual_extract_connection_points(self):
+        """Manually extract and print connection points for current target"""
+        current_pos = self.sphere_manager.get_position()
+        if current_pos:
+            self.extract_and_print_connection_points(current_pos)
+        else:
+            print("No sphere position available")
+    
     def cleanup(self):
         """Clean up resources"""
         self.sphere_manager.remove_sphere()
@@ -198,6 +230,10 @@ def toggle_debug():
     """Toggle debug visualization for the active robot"""
     print("To toggle debug, call robot_instance.toggle_debug_visualization()")
 
+def extract_connection_points():
+    """Extract connection points for current robot state"""
+    print("To extract connection points, call robot_instance.manual_extract_connection_points()")
+
 def main():
     """Main function for standalone execution - not used in BehaviorScript mode"""
     print("This script is designed to run as a BehaviorScript in Isaac Sim")
@@ -206,6 +242,7 @@ def main():
     print("   2. Press PLAY to start system")
     print("   3. Move blue sphere to control robot")
     print("   4. Use move_sphere_to(x, y, z) for manual testing")
+    print("   5. Use extract_connection_points() to manually extract points")
     print("   Debug: GREEN=segments | BLUE=FABRIK | YELLOW=target | RED=base")
     print(f"   Movement threshold: {0.005*1000:.1f}mm")
 
@@ -216,5 +253,6 @@ print("   1. Update FABRIK path in core/fabrik_interface.py if needed")
 print("   2. Press PLAY to start system")
 print("   3. Move blue sphere to control robot")
 print("   4. Use move_sphere_to(x, y, z) for manual testing")
+print("   5. Use extract_connection_points() to manually extract points")
 print("   Debug: GREEN=segments | BLUE=FABRIK | YELLOW=target | RED=base")
 print(f"   Movement threshold: {0.005*1000:.1f}mm")
