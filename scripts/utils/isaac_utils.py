@@ -10,12 +10,24 @@ def check_stage_available():
     stage = get_stage()
     return stage is not None
 
+def get_valid_prim(path):
+    """Helper function to get valid prim with common error checking"""
+    try:
+        stage = get_stage()
+        if not stage:
+            return None
+        
+        prim = stage.GetPrimAtPath(path)
+        if not prim or not prim.IsValid():
+            return None
+        
+        return prim
+    except Exception:
+        return None
+
 def get_prim_at_path(path):
     """Get prim at specified path"""
-    stage = get_stage()
-    if not stage:
-        return None
-    return stage.GetPrimAtPath(path)
+    return get_valid_prim(path)
 
 def is_prim_valid(prim):
     """Check if prim is valid"""
@@ -23,29 +35,29 @@ def is_prim_valid(prim):
 
 def get_world_transform(prim_path):
     """Get world transform for prim at path"""
+    prim = get_valid_prim(prim_path)
+    if not prim:
+        return None
+    
     try:
-        stage = get_stage()
-        if not stage:
-            return None
-        
-        prim = stage.GetPrimAtPath(prim_path)
-        if not is_prim_valid(prim):
-            return None
-            
         xformable = UsdGeom.Xformable(prim)
         return xformable.ComputeLocalToWorldTransform(0)
-        
     except Exception:
         return None
 
-def get_world_translation(prim_path):
-    """Get world translation for prim at path"""
-    transform = get_world_transform(prim_path)
-    if transform is None:
+def get_position(path):
+    """Get world position for any prim (unified function)"""
+    prim = get_valid_prim(path)
+    if not prim:
         return None
     
-    translation = transform.ExtractTranslation()
-    return (float(translation[0]), float(translation[1]), float(translation[2]))
+    try:
+        xformable = UsdGeom.Xformable(prim)
+        world_transform = xformable.ComputeLocalToWorldTransform(0)
+        translation = world_transform.ExtractTranslation()
+        return (float(translation[0]), float(translation[1]), float(translation[2]))
+    except Exception:
+        return None
 
 def create_xform_if_needed(path):
     """Create Xform at path if it doesn't exist"""
@@ -80,15 +92,11 @@ def remove_prim_if_exists(path):
 
 def set_prim_translation(prim_path, translation):
     """Set translation for prim at path"""
+    prim = get_valid_prim(prim_path)
+    if not prim:
+        return False
+    
     try:
-        stage = get_stage()
-        if not stage:
-            return False
-        
-        prim = stage.GetPrimAtPath(prim_path)
-        if not is_prim_valid(prim):
-            return False
-        
         xformable = UsdGeom.Xformable(prim)
         translate_ops = xformable.GetOrderedXformOps()
         
@@ -99,20 +107,14 @@ def set_prim_translation(prim_path, translation):
                 return True
         
         return False
-        
     except Exception:
         return False
 
 def print_prim_info(prim_path):
     """Print debug information about a prim"""
-    stage = get_stage()
-    if not stage:
-        print("No stage available")
-        return
-    
-    prim = stage.GetPrimAtPath(prim_path)
-    if not is_prim_valid(prim):
-        print(f"Prim at {prim_path} is not valid")
+    prim = get_valid_prim(prim_path)
+    if not prim:
+        print(f"Prim at {prim_path} is not valid or not found")
         return
     
     print(f"Prim: {prim_path}")
@@ -130,12 +132,8 @@ def print_prim_info(prim_path):
 
 def list_children(prim_path):
     """List children of prim at path"""
-    stage = get_stage()
-    if not stage:
-        return []
-    
-    prim = stage.GetPrimAtPath(prim_path)
-    if not is_prim_valid(prim):
+    prim = get_valid_prim(prim_path)
+    if not prim:
         return []
     
     children = []
@@ -160,28 +158,6 @@ def get_stage_and_robot(robot_path):
     
     return stage, robot_prim
 
-def get_link_world_position(link_path):
-    """Get world position of a link"""
-    try:
-        stage = omni.usd.get_context().get_stage()
-        if not stage:
-            return None
-        
-        prim = stage.GetPrimAtPath(link_path)
-        if not prim or not prim.IsValid():
-            print(f"Link not found: {link_path}")
-            return None
-            
-        xformable = UsdGeom.Xformable(prim)
-        world_transform = xformable.ComputeLocalToWorldTransform(0)
-        translation = world_transform.ExtractTranslation()
-        
-        return (float(translation[0]), float(translation[1]), float(translation[2]))
-        
-    except Exception as e:
-        print(f"Error getting position for {link_path}: {e}")
-        return None
-
 def search_for_link(prim, target_name):
     """Recursively search for a link by name"""
     if prim.GetName() == target_name:
@@ -193,22 +169,15 @@ def search_for_link(prim, target_name):
             return result
     return None
 
+# Alias functions for backward compatibility (these just call get_position now)
+def get_link_world_position(link_path):
+    """Get world position of a link (calls unified get_position)"""
+    return get_position(link_path)
+
 def get_sphere_position(sphere_path):
-    """Get current sphere position"""
-    try:
-        stage = omni.usd.get_context().get_stage()
-        if not stage:
-            return None
-        
-        prim = stage.GetPrimAtPath(sphere_path)
-        if not prim or not prim.IsValid():
-            return None
-            
-        xformable = UsdGeom.Xformable(prim)
-        world_transform = xformable.ComputeLocalToWorldTransform(0)
-        translation = world_transform.ExtractTranslation()
-        
-        return (float(translation[0]), float(translation[1]), float(translation[2]))
-        
-    except Exception:
-        return None
+    """Get current sphere position (calls unified get_position)"""
+    return get_position(sphere_path)
+
+def get_world_translation(prim_path):
+    """Get world translation for prim at path (calls unified get_position)"""
+    return get_position(prim_path)

@@ -1,6 +1,6 @@
 import omni.usd
 from pxr import Gf, UsdGeom, Sdf
-from isaac_utils import get_sphere_position
+from isaac_utils import get_position, get_valid_prim
 
 class SphereManager:
     def __init__(self, sphere_path="/World/Sphere_Tracker/tracked_sphere", 
@@ -59,18 +59,16 @@ class SphereManager:
     
     def get_position(self):
         """Get current sphere position"""
-        return get_sphere_position(self.sphere_path)
+        return get_position(self.sphere_path)
     
     def move_to(self, x, y, z):
         """Manually move the sphere to a specific position"""
+        prim = get_valid_prim(self.sphere_path)
+        if not prim:
+            print("No sphere found")
+            return False
+        
         try:
-            stage = omni.usd.get_context().get_stage()
-            prim = stage.GetPrimAtPath(self.sphere_path)
-            
-            if not prim or not prim.IsValid():
-                print("No sphere found")
-                return False
-            
             xformable = UsdGeom.Xformable(prim)
             translate_ops = xformable.GetOrderedXformOps()
             
