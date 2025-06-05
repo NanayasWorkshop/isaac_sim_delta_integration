@@ -29,6 +29,14 @@ class FABRIKInterface:
         """Check if FABRIK is initialized"""
         return self.initialized
     
+    def _convert_to_mm(self, *coordinates):
+        """Convert coordinates from meters to millimeters"""
+        return [coord * 1000.0 for coord in coordinates]
+    
+    def _convert_to_m(self, *coordinates):
+        """Convert coordinates from millimeters to meters"""
+        return [coord / 1000.0 for coord in coordinates]
+    
     def calculate_motors(self, target_x_m, target_y_m, target_z_m, current_j_points=None):
         """Calculate motor positions for target (input in meters, converts to mm internally)"""
         if not self.initialized:
@@ -36,14 +44,11 @@ class FABRIKInterface:
             return None
         
         try:
-            # Convert position to millimeters for FABRIK
-            target_x_mm = target_x_m * 1000  # m to mm
-            target_y_mm = target_y_m * 1000
-            target_z_mm = target_z_m * 1000
+            # Convert target to millimeters
+            target_x_mm, target_y_mm, target_z_mm = self._convert_to_mm(target_x_m, target_y_m, target_z_m)
             
-            # Choose FABRIK method based on J points availability
-            if current_j_points is not None and len(current_j_points) > 0:
-                # Convert J points to FABRIK format (m to mm)
+            # Determine FABRIK method and execute
+            if current_j_points and len(current_j_points) > 0:
                 fabrik_j_points = self._convert_j_points_to_fabrik_format(current_j_points)
                 if fabrik_j_points is not None:
                     print(f"Target: ({target_x_mm:.1f}, {target_y_mm:.1f}, {target_z_mm:.1f})mm - FABRIK: From J points")
@@ -54,7 +59,6 @@ class FABRIKInterface:
                     print(f"Target: ({target_x_mm:.1f}, {target_y_mm:.1f}, {target_z_mm:.1f})mm - FABRIK: J points invalid, straight-up")
                     result = self.delta_robot.motor.MotorModule.calculate_motors(target_x_mm, target_y_mm, target_z_mm)
             else:
-                # Use straight-up initialization
                 print(f"Target: ({target_x_mm:.1f}, {target_y_mm:.1f}, {target_z_mm:.1f})mm - FABRIK: Straight-up")
                 result = self.delta_robot.motor.MotorModule.calculate_motors(target_x_mm, target_y_mm, target_z_mm)
             
@@ -72,30 +76,21 @@ class FABRIKInterface:
         try:
             fabrik_points = []
             for i, j_point in enumerate(j_points):
+                # Handle both numpy arrays and tuples/lists
                 if hasattr(j_point, 'shape'):  # numpy array
-                    # Convert m to mm
-                    point_mm = np.array([
-                        float(j_point[0]) * 1000.0,
-                        float(j_point[1]) * 1000.0,
-                        float(j_point[2]) * 1000.0
-                    ])
-                    fabrik_points.append(point_mm)
+                    point_mm = np.array(self._convert_to_mm(float(j_point[0]), float(j_point[1]), float(j_point[2])))
                 elif hasattr(j_point, '__len__') and len(j_point) == 3:  # tuple/list
-                    # Convert m to mm
-                    point_mm = np.array([
-                        float(j_point[0]) * 1000.0,
-                        float(j_point[1]) * 1000.0,
-                        float(j_point[2]) * 1000.0
-                    ])
-                    fabrik_points.append(point_mm)
+                    point_mm = np.array(self._convert_to_mm(float(j_point[0]), float(j_point[1]), float(j_point[2])))
                 else:
                     print(f"Warning: J point {i} has unexpected format")
                     return None
+                
+                fabrik_points.append(point_mm)
             
-            # Ensure base is at origin for FABRIK
+            # Ensure base is at origin for FABRIK (within 1mm tolerance)
             if len(fabrik_points) > 0:
                 base_distance = np.linalg.norm(fabrik_points[0])
-                if base_distance > 1.0:  # 1mm tolerance
+                if base_distance > 1.0:
                     fabrik_points[0] = np.array([0.0, 0.0, 0.0])
             
             return fabrik_points
@@ -113,33 +108,32 @@ class FABRIKInterface:
             # Extract FABRIK joint positions (convert from mm to m)
             if hasattr(motor_result, 'fabrik_joint_positions'):
                 for joint_pos in motor_result.fabrik_joint_positions:
-                    if hasattr(joint_pos, 'shape'):  # numpy array
-                        pos_m = (joint_pos[0] / 1000.0, joint_pos[1] / 1000.0, joint_pos[2] / 1000.0)
+                    pos_m = self._extract_position_to_meters(joint_pos)
+                    if pos_m:
                         fabrik_joints.append(pos_m)
-                    else:
-                        try:
-                            pos_m = (joint_pos.x / 1000.0, joint_pos.y / 1000.0, joint_pos.z / 1000.0)
-                            fabrik_joints.append(pos_m)
-                        except:
-                            pass
             
             # Extract segment end-effector positions (convert from mm to m)
             if hasattr(motor_result, 'original_segment_positions'):
-                base_pos = (0, 0, 0)
-                segment_end_effectors.append(base_pos)
+                # Add base position
+                segment_end_effectors.append((0, 0, 0))
                 
                 for seg_pos in motor_result.original_segment_positions:
-                    if hasattr(seg_pos, 'shape'):  # numpy array
-                        pos_m = (seg_pos[0] / 1000.0, seg_pos[1] / 1000.0, seg_pos[2] / 1000.0)
+                    pos_m = self._extract_position_to_meters(seg_pos)
+                    if pos_m:
                         segment_end_effectors.append(pos_m)
-                    else:
-                        try:
-                            pos_m = (seg_pos.x / 1000.0, seg_pos.y / 1000.0, seg_pos.z / 1000.0)
-                            segment_end_effectors.append(pos_m)
-                        except:
-                            pass
             
         except Exception as e:
             print(f"Error extracting FABRIK data: {e}")
         
         return fabrik_joints, segment_end_effectors
+    
+    def _extract_position_to_meters(self, position):
+        """Extract position from various formats and convert to meters"""
+        try:
+            if hasattr(position, 'shape'):  # numpy array
+                return tuple(self._convert_to_m(position[0], position[1], position[2]))
+            else:
+                # Try to access as object with x, y, z attributes
+                return tuple(self._convert_to_m(position.x, position.y, position.z))
+        except:
+            return None
