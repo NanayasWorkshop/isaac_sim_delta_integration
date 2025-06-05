@@ -3,7 +3,11 @@ from pxr import UsdGeom
 import math
 
 class ConnectionPointExtractor:
-    def __init__(self, robot_path="/World/delta_robot_3_00"):
+    def __init__(self, robot_path):
+        """
+        Initialize connection point extractor
+        robot_path: Path to the robot in the USD scene (no default - must be provided)
+        """
         self.robot_path = robot_path
         self.base_to_first_link_distance = None
         self.segments_found = 0

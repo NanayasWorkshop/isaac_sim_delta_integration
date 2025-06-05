@@ -28,12 +28,21 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
     def on_init(self):
         print("Initializing modular sphere-following robot...")
         
-        # Initialize components
+        # ===== ROBOT CONFIGURATION =====
+        # *** CHANGE ONLY THIS LINE TO SWITCH ROBOTS ***
+        self.robot_path = "/World/delta_robot_7_00"  
+        # Examples:
+        # self.robot_path = "/World/delta_robot_7_00" 
+        # self.robot_path = "/World/your_custom_robot"
+        
+        print(f"Using robot at: {self.robot_path}")
+        
+        # Initialize components - robot_path is passed to all components that need it
         self.sphere_manager = SphereManager()
-        self.robot_controller = RobotController()
+        self.robot_controller = RobotController(robot_path=self.robot_path)
         self.fabrik_interface = FABRIKInterface()  # UPDATE PATH HERE IF NEEDED
         self.debug_visualizer = DebugVisualizer()
-        self.connection_extractor = ConnectionPointExtractor()
+        self.connection_extractor = ConnectionPointExtractor(robot_path=self.robot_path)
         
         # Movement threshold (0.5cm = 0.005m)
         self.movement_threshold = 0.005
@@ -238,21 +247,26 @@ def main():
     """Main function for standalone execution - not used in BehaviorScript mode"""
     print("This script is designed to run as a BehaviorScript in Isaac Sim")
     print("Instructions:")
-    print("   1. Update FABRIK path in core/fabrik_interface.py if needed")
-    print("   2. Press PLAY to start system")
-    print("   3. Move blue sphere to control robot")
-    print("   4. Use move_sphere_to(x, y, z) for manual testing")
-    print("   5. Use extract_connection_points() to manually extract points")
+    print("   1. Configure robot path in on_init() method (line 26)")
+    print("   2. Update FABRIK path in core/fabrik_interface.py if needed")
+    print("   3. Press PLAY to start system")
+    print("   4. Move blue sphere to control robot")
+    print("   5. Use move_sphere_to(x, y, z) for manual testing")
+    print("   6. Use extract_connection_points() to manually extract points")
     print("   Debug: GREEN=segments | BLUE=FABRIK | YELLOW=target | RED=base")
     print(f"   Movement threshold: {0.005*1000:.1f}mm")
 
 # Print instructions when module is loaded
-print("Enhanced Modular Sphere Following Delta Robot Script Loaded")
+print("=== Enhanced Modular Sphere Following Delta Robot Script Loaded ===")
+print("SINGLE CONFIGURATION POINT:")
+print("   • Change robot path ONLY in main_controller.py line 26")
+print("   • All components will automatically use the same robot")
+print("")
 print("Instructions:")
-print("   1. Update FABRIK path in core/fabrik_interface.py if needed")
-print("   2. Press PLAY to start system")
-print("   3. Move blue sphere to control robot")
-print("   4. Use move_sphere_to(x, y, z) for manual testing")
-print("   5. Use extract_connection_points() to manually extract points")
+print("   1. Set robot path: self.robot_path = '/World/your_robot_name'")
+print("   2. Update FABRIK path in core/fabrik_interface.py if needed")
+print("   3. Press PLAY to start system")
+print("   4. Move blue sphere to control robot")
+print("   5. Use move_sphere_to(x, y, z) for manual testing")
 print("   Debug: GREEN=segments | BLUE=FABRIK | YELLOW=target | RED=base")
 print(f"   Movement threshold: {0.005*1000:.1f}mm")

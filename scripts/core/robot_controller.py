@@ -1,7 +1,12 @@
 import numpy as np
 
 class RobotController:
-    def __init__(self, robot_path="/World/delta_robot_7_00", name="sphere_following_robot"):
+    def __init__(self, robot_path, name="sphere_following_robot"):
+        """
+        Initialize robot controller
+        robot_path: Path to the robot in the USD scene (no default - must be provided)
+        name: Name for the robot view
+        """
         self.robot_path = robot_path
         self.robot_name = name
         self.robot_view = None
@@ -18,7 +23,7 @@ class RobotController:
             )
             self.robot_view.initialize()
             
-            print("Robot initialized")
+            print(f"Robot initialized at path: {self.robot_path}")
             self.initialized = True
             return True
             
@@ -42,6 +47,14 @@ class RobotController:
             return []
         return self.robot_view.dof_names
     
+    def get_max_segments(self):
+        """Calculate maximum number of segments based on robot DOF count"""
+        dof_count = self.get_dof_count()
+        if dof_count == 0:
+            return 0
+        # Assuming 6 DOF per segment
+        return dof_count // 6
+    
     def apply_joint_targets(self, joint_targets):
         """Apply joint position targets to the robot"""
         if not self.initialized or not self.robot_view:
@@ -61,7 +74,16 @@ class RobotController:
         try:
             joint_targets = np.zeros(self.get_dof_count())
             
-            for level_idx in range(min(3, len(fabrik_result.levels))):
+            # Calculate maximum segments we can handle based on robot DOF
+            max_segments = self.get_max_segments()
+            
+            # Process only as many segments as the robot supports and FABRIK provides
+            segments_to_process = min(max_segments, len(fabrik_result.levels))
+            
+            print(f"Robot DOF: {self.get_dof_count()}, Max segments: {max_segments}, "
+                  f"FABRIK levels: {len(fabrik_result.levels)}, Processing: {segments_to_process}")
+            
+            for level_idx in range(segments_to_process):
                 level = fabrik_result.levels[level_idx]
                 base_idx = level_idx * 6
                 
@@ -72,6 +94,9 @@ class RobotController:
                     joint_targets[base_idx + 3] = level.prismatic_joint
                     joint_targets[base_idx + 4] = np.deg2rad(level.pitch_joint)
                     joint_targets[base_idx + 5] = np.deg2rad(level.roll_joint)
+                else:
+                    print(f"Warning: Segment {level_idx} would exceed joint array bounds")
+                    break
             
             return joint_targets
             
