@@ -90,8 +90,8 @@ class RobotController:
                 if base_idx + 5 < len(joint_targets):
                     joint_targets[base_idx + 0] = np.deg2rad(level.roll_joint)
                     joint_targets[base_idx + 1] = np.deg2rad(level.pitch_joint)
-                    joint_targets[base_idx + 2] = level.prismatic_joint
-                    joint_targets[base_idx + 3] = level.prismatic_joint
+                    joint_targets[base_idx + 2] = level.prismatic_joint / 2
+                    joint_targets[base_idx + 3] = level.prismatic_joint / 2 
                     joint_targets[base_idx + 4] = np.deg2rad(level.pitch_joint)
                     joint_targets[base_idx + 5] = np.deg2rad(level.roll_joint)
                 else:
