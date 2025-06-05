@@ -126,6 +126,11 @@ class JointConverter:
         self.joints = []
         
         print(f"\n=== Calculating J points from {len(self.points)} P points ===")
+
+        # ADD BASE JOINT J0 at origin (0,0,0) - FABRIK requirement
+        base_joint = np.array([0.0, 0.0, 0.0])
+        self.joints.append(base_joint)
+        print
         
         # Calculate (n-1) joints for n points using optimization
         for i in range(len(self.points) - 1):

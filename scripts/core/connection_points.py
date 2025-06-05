@@ -148,6 +148,10 @@ class ConnectionPointExtractor:
             print(f"Error calculating base distance: {e}")
             return False
     
+    def extract_current_state_points(self):
+        """Extract connection points from CURRENT robot state (no target dependency)"""
+        return self.extract_all_connection_points(target_position=None)
+    
     def extract_all_connection_points(self, target_position=None):
         """Extract all connection points from the robot"""
         if not self.scan_robot_structure():
@@ -205,32 +209,52 @@ class ConnectionPointExtractor:
                     connection_points.append((f"seg{seg_num}_to_seg{seg_num+1}", midpoint))
                     print(f"Connection seg{seg_num}_link6 to seg{seg_num+1}_link1: {midpoint}")
             
-            # 3. End-effector extension point
-            if target_position:
-                # Get last segment's link6
-                last_seg_link6_path = self.find_link_in_robot(f"seg{self.segments_found}_link6")
-                last_seg_link6_pos = self.get_link_world_position(last_seg_link6_path)
-                
-                if last_seg_link6_pos:
-                    # Calculate direction from last link to target
+            # 3. End-effector extension point - MINIMAL CHANGE HERE
+            last_seg_link6_path = self.find_link_in_robot(f"seg{self.segments_found}_link6")
+            last_seg_link6_pos = self.get_link_world_position(last_seg_link6_path)
+            
+            if last_seg_link6_pos:
+                if target_position:
+                    # TARGET MODE: Extend toward target
                     direction = (
                         target_position[0] - last_seg_link6_pos[0],
                         target_position[1] - last_seg_link6_pos[1],
                         target_position[2] - last_seg_link6_pos[2]
                     )
-                    # Normalize direction
-                    length = math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2)
-                    if length > 0:
-                        direction = (direction[0]/length, direction[1]/length, direction[2]/length)
-                        
-                        # Extend by fixed distance toward target
-                        end_extension = (
-                            last_seg_link6_pos[0] + direction[0] * self.base_to_first_link_distance,
-                            last_seg_link6_pos[1] + direction[1] * self.base_to_first_link_distance,
-                            last_seg_link6_pos[2] + direction[2] * self.base_to_first_link_distance
+                    extension_name = "end_extension"
+                else:
+                    # CURRENT STATE MODE: Extend in current orientation
+                    # Get direction from link5 to link6 (current pointing direction)
+                    last_seg_link5_path = self.find_link_in_robot(f"seg{self.segments_found}_link5")
+                    last_seg_link5_pos = self.get_link_world_position(last_seg_link5_path)
+                    
+                    if last_seg_link5_pos:
+                        direction = (
+                            last_seg_link6_pos[0] - last_seg_link5_pos[0],
+                            last_seg_link6_pos[1] - last_seg_link5_pos[1],
+                            last_seg_link6_pos[2] - last_seg_link5_pos[2]
                         )
-                        connection_points.append(("end_extension", end_extension))
-                        print(f"End extension point: {end_extension}")
+                    else:
+                        # Fallback: use base direction
+                        direction = (
+                            seg1_link1_pos[0] - base_pos[0],
+                            seg1_link1_pos[1] - base_pos[1],
+                            seg1_link1_pos[2] - base_pos[2]
+                        )
+                    extension_name = "end_extension_current"
+                
+                # Normalize and extend
+                length = math.sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2)
+                if length > 0:
+                    direction = (direction[0]/length, direction[1]/length, direction[2]/length)
+                    
+                    end_extension = (
+                        last_seg_link6_pos[0] + direction[0] * self.base_to_first_link_distance,
+                        last_seg_link6_pos[1] + direction[1] * self.base_to_first_link_distance,
+                        last_seg_link6_pos[2] + direction[2] * self.base_to_first_link_distance
+                    )
+                    connection_points.append((extension_name, end_extension))
+                    print(f"End extension point: {end_extension}")
             
             self.connection_points = connection_points
             return connection_points

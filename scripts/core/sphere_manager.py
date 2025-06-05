@@ -3,7 +3,7 @@ from pxr import Gf, UsdGeom, Sdf
 
 class SphereManager:
     def __init__(self, sphere_path="/World/Sphere_Tracker/tracked_sphere", 
-                 radius=0.025, color=[0, 0, 1], default_position=(0, 0, 0.6)):
+                 radius=0.025, color=[0, 0, 1], default_position=(0, 0, 1.2)):
         self.sphere_path = sphere_path
         self.sphere_radius = radius
         self.sphere_color = color
