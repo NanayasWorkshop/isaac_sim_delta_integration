@@ -40,6 +40,7 @@ class DebugVisualizer:
         self.PURPLE = (0.8, 0.0, 1.0, 1.0)  # Connection points (brighter purple)
         self.ORANGE = (1.0, 0.6, 0.0, 1.0)  # Extension points (brighter orange)
         self.CYAN = (0.0, 1.0, 1.0, 1.0)    # Alternative connection color
+        self.DARK_PURPLE = (0.4, 0.0, 0.6, 1.0)  # NEW: Dark purple for J points
     
     def setup_debug_draw(self):
         """Initialize debug drawing system"""
@@ -115,6 +116,36 @@ class DebugVisualizer:
             
         except Exception as e:
             print(f"Error drawing custom lines: {e}")
+    
+    def visualize_j_points(self, j_points):
+        """Visualize J points with dark purple color and connecting lines"""
+        if not self.enabled or not self.available or not self.debug_draw or not j_points:
+            return
+        
+        try:
+            # Convert J points to list format if they're numpy arrays
+            j_positions = []
+            for j in j_points:
+                if hasattr(j, 'shape'):  # numpy array
+                    j_positions.append([float(j[0]), float(j[1]), float(j[2])])
+                else:
+                    j_positions.append([float(j[0]), float(j[1]), float(j[2])])
+            
+            # Draw J points as dark purple points (larger size for visibility)
+            j_colors = [self.DARK_PURPLE] * len(j_positions)
+            j_sizes = [12.0] * len(j_positions)  # Larger than other points
+            self.debug_draw.draw_points(j_positions, j_colors, j_sizes)
+            
+            # Draw connecting lines between consecutive J points
+            if len(j_positions) > 1:
+                for i in range(len(j_positions) - 1):
+                    self.debug_draw.draw_lines([j_positions[i]], [j_positions[i + 1]], 
+                                             [self.DARK_PURPLE], [3.5])  # Slightly thicker lines
+            
+            print(f"Drawing {len(j_positions)} J points with {len(j_positions)-1} connecting lines")
+            
+        except Exception as e:
+            print(f"Error visualizing J points: {e}")
     
     def visualize_fabrik_data(self, fabrik_joints, segment_end_effectors, target_position):
         """Update debug visualization using Isaac Sim debug draw"""
@@ -215,7 +246,11 @@ class DebugVisualizer:
             print(f"Error visualizing connection points: {e}")
     
     def visualize_fabrik_and_connections(self, fabrik_joints, segment_end_effectors, target_position, connection_points):
-        """Combined visualization of FABRIK data and connection points"""
+        """Combined visualization of FABRIK data and connection points (legacy method)"""
+        self.visualize_complete_system(fabrik_joints, segment_end_effectors, target_position, connection_points, [])
+    
+    def visualize_complete_system(self, fabrik_joints, segment_end_effectors, target_position, connection_points, j_points):
+        """Complete visualization: FABRIK data, connection points, and J points"""
         if not self.enabled or not self.available or not self.debug_draw:
             return
         
@@ -265,7 +300,7 @@ class DebugVisualizer:
                 
                 self.debug_draw.draw_points(seg_positions, seg_colors, seg_sizes)
             
-            # Draw connection points on top with enhanced visibility
+            # Draw connection points (P points)
             if connection_points:
                 # Separate different types of connection points
                 base_extensions = []
@@ -298,7 +333,11 @@ class DebugVisualizer:
                     for i in range(len(all_connection_points) - 1):
                         self.debug_draw.draw_lines([all_connection_points[i]], [all_connection_points[i + 1]], [self.PURPLE], [4.0])
             
-            print("Combined FABRIK and connection points visualization updated")
+            # Draw J points (NEW!)
+            if j_points:
+                self.visualize_j_points(j_points)
+            
+            print("Complete system visualization updated (FABRIK + P points + J points)")
             
         except Exception as e:
-            print(f"Error in combined visualization: {e}")
+            print(f"Error in complete system visualization: {e}")

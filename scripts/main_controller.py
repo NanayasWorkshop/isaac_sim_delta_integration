@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Isaac Sim 4.5.0 Modular Sphere Following Robot
+Isaac Sim 4.5.0 Modular Sphere Following Robot with Joint Converter
 BehaviorScript for Isaac Sim
 """
 
@@ -23,10 +23,11 @@ from core.robot_controller import RobotController
 from core.fabrik_interface import FABRIKInterface
 from core.debug_visualizer import DebugVisualizer
 from core.connection_points import ConnectionPointExtractor
+from core.joint_converter import JointConverter  # NEW IMPORT
 
 class SphereFollowingRobotWithDebug(BehaviorScript):
     def on_init(self):
-        print("Initializing modular sphere-following robot...")
+        print("Initializing modular sphere-following robot with joint converter...")
         
         # ===== ROBOT CONFIGURATION =====
         # *** CHANGE ONLY THIS LINE TO SWITCH ROBOTS ***
@@ -43,6 +44,7 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
         self.fabrik_interface = FABRIKInterface()  # UPDATE PATH HERE IF NEEDED
         self.debug_visualizer = DebugVisualizer()
         self.connection_extractor = ConnectionPointExtractor(robot_path=self.robot_path)
+        self.joint_converter = JointConverter()  # NEW COMPONENT
         
         # Movement threshold (0.5cm = 0.005m)
         self.movement_threshold = 0.005
@@ -56,6 +58,7 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
         self.current_segment_end_effectors = []
         self.current_target = None
         self.current_connection_points = []
+        self.current_j_points = []  # NEW: Store J points
     
     def on_play(self):
         print("Starting modular robot system...")
@@ -78,8 +81,8 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
                 print("Sphere creation failed")
                 return
             
-            # Extract initial connection points and visualize them
-            self.extract_and_print_connection_points()
+            # Extract initial connection points and calculate J points
+            self.extract_and_calculate_points()
             
             # Start monitoring
             self.start_monitoring()
@@ -106,19 +109,49 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
         except Exception as e:
             print(f"Error during destroy: {e}")
     
-    def extract_and_print_connection_points(self, target_position=None):
-        """Extract and print connection points"""
+    def extract_and_calculate_points(self, target_position=None):
+        """Extract P points and calculate J points"""
         try:
             if target_position is None:
                 target_position = self.sphere_manager.get_position()
             
+            # Extract P points (connection points)
             self.current_connection_points = self.connection_extractor.extract_all_connection_points(target_position)
             self.connection_extractor.print_all_points()
+            
+            # Calculate J points from P points
+            self.calculate_j_points_from_p_points()
             
             return self.current_connection_points
             
         except Exception as e:
-            print(f"Error extracting connection points: {e}")
+            print(f"Error extracting and calculating points: {e}")
+            return []
+    
+    def calculate_j_points_from_p_points(self):
+        """Calculate J points from current P points using joint converter"""
+        try:
+            if not self.current_connection_points:
+                print("No connection points available for J point calculation")
+                return []
+            
+            # Load P points into joint converter
+            self.joint_converter.load_isaac_connection_points(self.current_connection_points)
+            
+            # Calculate J points
+            self.current_j_points = self.joint_converter.calculate_j_points_from_isaac_p_points()
+            
+            # Print complete summary
+            self.joint_converter.print_p_and_j_summary()
+            
+            print(f"=== CONVERSION COMPLETE ===")
+            print(f"Input: {len(self.current_connection_points)} P points")
+            print(f"Output: {len(self.current_j_points)} J points")
+            
+            return self.current_j_points
+            
+        except Exception as e:
+            print(f"Error calculating J points: {e}")
             return []
     
     def start_monitoring(self):
@@ -160,9 +193,9 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
             # Initialize last position on first run
             if self.sphere_manager.last_position is None:
                 self.sphere_manager.update_last_position(current_pos)
-                # Move robot to initial position and extract connection points (with visualization)
+                # Move robot to initial position and extract/calculate points
                 self.move_robot_to_target(current_pos)
-                self.extract_and_print_connection_points(current_pos)
+                self.extract_and_calculate_points(current_pos)
                 return
             
             # Check if sphere moved enough to trigger robot movement
@@ -171,8 +204,8 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
                 success = self.move_robot_to_target(current_pos)
                 if success:
                     self.sphere_manager.update_last_position(current_pos)
-                    # Update connection points with new target (automatically visualizes)
-                    self.extract_and_print_connection_points(current_pos)
+                    # Update P and J points with new target
+                    self.extract_and_calculate_points(current_pos)
         
         except Exception as e:
             print(f"Error in monitoring loop: {e}")
@@ -195,13 +228,14 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
             self.current_fabrik_joints, self.current_segment_end_effectors = \
                 self.fabrik_interface.extract_visualization_data(result)
             
-            # Update debug visualization with combined FABRIK and connection points
+            # Update debug visualization with combined FABRIK, connection points, and J points
             if self.debug_visualizer.is_enabled():
-                self.debug_visualizer.visualize_fabrik_and_connections(
+                self.debug_visualizer.visualize_complete_system(
                     self.current_fabrik_joints,
                     self.current_segment_end_effectors,
                     self.current_target,
-                    self.current_connection_points
+                    self.current_connection_points,
+                    self.current_j_points  # Pass J points to visualizer
                 )
             
             # Move robot using FABRIK result
@@ -217,13 +251,36 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
         """Toggle debug visualization on/off"""
         self.debug_visualizer.toggle()
     
-    def manual_extract_connection_points(self):
-        """Manually extract and print connection points for current target"""
+    def manual_extract_and_calculate_points(self):
+        """Manually extract P points and calculate J points for current target"""
         current_pos = self.sphere_manager.get_position()
         if current_pos:
-            self.extract_and_print_connection_points(current_pos)
+            self.extract_and_calculate_points(current_pos)
         else:
             print("No sphere position available")
+    
+    def manual_recalculate_j_points(self):
+        """Manually recalculate J points from current P points"""
+        if self.current_connection_points:
+            self.calculate_j_points_from_p_points()
+        else:
+            print("No P points available - extract connection points first")
+    
+    def print_current_points_summary(self):
+        """Print summary of current P and J points"""
+        print(f"\n=== CURRENT POINTS SUMMARY ===")
+        print(f"P points (connection points): {len(self.current_connection_points)}")
+        print(f"J points (optimized joints): {len(self.current_j_points)}")
+        
+        if self.current_connection_points:
+            print("\nP POINTS:")
+            for i, (name, point) in enumerate(self.current_connection_points):
+                print(f"  P{i+1} ({name}): ({point[0]:.6f}, {point[1]:.6f}, {point[2]:.6f})")
+        
+        if self.current_j_points:
+            print("\nJ POINTS:")
+            for i, j_point in enumerate(self.current_j_points):
+                print(f"  J{i+1}: ({j_point[0]:.6f}, {j_point[1]:.6f}, {j_point[2]:.6f})")
     
     def cleanup(self):
         """Clean up resources"""
@@ -240,29 +297,44 @@ def toggle_debug():
     """Toggle debug visualization for the active robot"""
     print("To toggle debug, call robot_instance.toggle_debug_visualization()")
 
-def extract_connection_points():
-    """Extract connection points for current robot state"""
-    print("To extract connection points, call robot_instance.manual_extract_connection_points()")
+def extract_and_calculate_points():
+    """Extract P points and calculate J points for current robot state"""
+    print("To extract and calculate points, call robot_instance.manual_extract_and_calculate_points()")
+
+def recalculate_j_points():
+    """Recalculate J points from current P points"""
+    print("To recalculate J points, call robot_instance.manual_recalculate_j_points()")
+
+def print_points_summary():
+    """Print summary of current P and J points"""
+    print("To print points summary, call robot_instance.print_current_points_summary()")
 
 def main():
     """Main function for standalone execution - not used in BehaviorScript mode"""
     print("This script is designed to run as a BehaviorScript in Isaac Sim")
     print("Instructions:")
-    print("   1. Configure robot path in on_init() method (line 26)")
+    print("   1. Configure robot path in on_init() method (line 28)")
     print("   2. Update FABRIK path in core/fabrik_interface.py if needed")
     print("   3. Press PLAY to start system")
     print("   4. Move blue sphere to control robot")
     print("   5. Use move_sphere_to(x, y, z) for manual testing")
-    print("   6. Use extract_connection_points() to manually extract points")
+    print("   6. Use extract_and_calculate_points() to manually extract P and calculate J points")
+    print("   7. Use recalculate_j_points() to recalculate J points from current P points")
+    print("   8. Use print_points_summary() to see current P and J points")
     print("   Debug: GREEN=segments | BLUE=FABRIK | YELLOW=target | RED=base")
     print("   Connection Points: PURPLE=inter-segments | ORANGE=extensions")
     print(f"   Movement threshold: {0.005*1000:.1f}mm")
 
 # Print instructions when module is loaded
-print("=== Enhanced Modular Sphere Following Delta Robot Script Loaded ===")
+print("=== Enhanced Modular Sphere Following Delta Robot with Joint Converter ===")
 print("SINGLE CONFIGURATION POINT:")
-print("   • Change robot path ONLY in main_controller.py line 26")
+print("   • Change robot path ONLY in main_controller.py line 28")
 print("   • All components will automatically use the same robot")
+print("")
+print("NEW FEATURES:")
+print("   • P → J point conversion using joint optimization")
+print("   • Automatic J point calculation on sphere movement")
+print("   • Manual P and J point extraction functions")
 print("")
 print("Instructions:")
 print("   1. Set robot path: self.robot_path = '/World/your_robot_name'")
@@ -270,6 +342,8 @@ print("   2. Update FABRIK path in core/fabrik_interface.py if needed")
 print("   3. Press PLAY to start system")
 print("   4. Move blue sphere to control robot")
 print("   5. Use move_sphere_to(x, y, z) for manual testing")
+print("   6. Use extract_and_calculate_points() for manual P→J conversion")
+print("   7. Use print_points_summary() to see all points")
 print("   Debug: GREEN=segments | BLUE=FABRIK | YELLOW=target | RED=base")
 print("   Connection Points: PURPLE=inter-segments | ORANGE=extensions")
 print(f"   Movement threshold: {0.005*1000:.1f}mm")
