@@ -33,7 +33,6 @@ class ConnectionPointExtractor:
             self._scan_for_segments(robot_prim, segments)
             
             self.segments_found = len(segments)
-            print(f"Found {self.segments_found} segments: {segments}")
             return self.segments_found > 0
             
         except Exception as e:
@@ -61,7 +60,6 @@ class ConnectionPointExtractor:
             seg1_link1_path = self.find_link_in_robot("seg1_link1")
             
             if not base_pos or not seg1_link1_path:
-                print("Could not get required positions for base distance calculation")
                 return False
             
             seg1_link1_pos = get_position(seg1_link1_path)
@@ -74,9 +72,6 @@ class ConnectionPointExtractor:
             dz = seg1_link1_pos[2] - base_pos[2]
             self.base_to_first_link_distance = math.sqrt(dx*dx + dy*dy + dz*dz)
             
-            print(f"Base position: {base_pos}")
-            print(f"seg1_link1 position: {seg1_link1_pos}")
-            print(f"Base to first link distance: {self.base_to_first_link_distance:.6f}m")
             return True
             
         except Exception as e:
@@ -123,7 +118,6 @@ class ConnectionPointExtractor:
                                                  (-base_direction[0], -base_direction[1], -base_direction[2]), 
                                                  self.base_to_first_link_distance)
             connection_points.append(("base_extension", base_extension))
-            print(f"Base extension point: {base_extension}")
             
             # 2. Inter-segment connection points
             for seg_num in range(1, self.segments_found):
@@ -141,7 +135,6 @@ class ConnectionPointExtractor:
                         (segN_link6_pos[2] + segNext_link1_pos[2]) / 2.0
                     )
                     connection_points.append((f"seg{seg_num}_to_seg{seg_num+1}", midpoint))
-                    print(f"Connection seg{seg_num}_link6 to seg{seg_num+1}_link1: {midpoint}")
             
             # 3. End-effector extension point
             last_seg_link6_path = self.find_link_in_robot(f"seg{self.segments_found}_link6")
@@ -166,7 +159,6 @@ class ConnectionPointExtractor:
                 
                 end_extension = self._extend_position(last_seg_link6_pos, direction, self.base_to_first_link_distance)
                 connection_points.append((extension_name, end_extension))
-                print(f"End extension point: {end_extension}")
             
             self.connection_points = connection_points
             return connection_points
@@ -177,14 +169,7 @@ class ConnectionPointExtractor:
     
     def print_all_points(self):
         """Print all extracted connection points"""
-        print(f"\n=== Connection Points Summary ===")
-        print(f"Robot: {self.robot_path}")
-        print(f"Segments found: {self.segments_found}")
-        print(f"Base distance: {self.base_to_first_link_distance:.6f}m")
-        print(f"Total connection points: {len(self.connection_points)}")
-        
-        for name, point in self.connection_points:
-            print(f"  {name}: ({point[0]:.6f}, {point[1]:.6f}, {point[2]:.6f})")
+        print(f"Connection Points: {self.segments_found} segments, {len(self.connection_points)} points")
     
     def get_connection_points_for_cpp(self):
         """Get connection points in format suitable for C++ module"""

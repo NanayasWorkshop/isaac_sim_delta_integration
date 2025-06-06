@@ -24,6 +24,7 @@ from core.fabrik_interface import FABRIKInterface
 from core.debug_visualizer import DebugVisualizer
 from core.connection_points import ConnectionPointExtractor
 from core.joint_converter import JointConverter
+from core.collision_detector import CollisionDetector
 
 class SphereFollowingRobotWithDebug(BehaviorScript):
     def on_init(self):
@@ -40,6 +41,9 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
         self.debug_visualizer = DebugVisualizer()
         self.connection_extractor = ConnectionPointExtractor(robot_path=self.robot_path)
         self.joint_converter = JointConverter()
+        
+        # Initialize collision detector (Phase 1)
+        self.collision_detector = CollisionDetector()
         
         # State variables
         self.movement_threshold = 0.005  # 5mm
@@ -108,8 +112,6 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
                 self.joint_converter.load_isaac_connection_points(self.current_data['connection_points'])
                 self.current_data['j_points'] = self.joint_converter.calculate_j_points_from_isaac_p_points()
                 self.joint_converter.print_p_and_j_summary()
-                
-                print(f"Conversion: {len(self.current_data['connection_points'])} P → {len(self.current_data['j_points'])} J points")
             
             return self.current_data['connection_points']
             
@@ -174,14 +176,12 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
         """Process robot movement to target position"""
         try:
             if not is_initial:
-                # Extract current state before moving
-                print("Extracting current state before movement...")
+                # Extract current state before moving (silent)
                 current_state_points = self.connection_extractor.extract_current_state_points()
                 
                 if current_state_points:
                     self.joint_converter.load_isaac_connection_points(current_state_points)
                     current_j_points = self.joint_converter.calculate_j_points_from_isaac_p_points()
-                    print(f"Current state: {len(current_state_points)} P → {len(current_j_points)} J points")
             
             # Move robot and update visualization
             if self.move_robot_to_target(target_position):
@@ -191,13 +191,18 @@ class SphereFollowingRobotWithDebug(BehaviorScript):
             print(f"Error processing movement: {e}")
     
     def move_robot_to_target(self, target_position):
-        """Move robot to target using FABRIK and update visualization"""
+        """Move robot to target using FABRIK with collision data"""
         try:
-            # Store target and solve FABRIK
             self.current_data['target'] = target_position
             
+            # Phase 1: Update collision data when target changes (event-driven)
+            self.collision_detector.update_collision_data()
+            collision_data = self.collision_detector.get_collision_data_for_cpp()
+            
             result = self.fabrik_interface.calculate_motors(
-                target_position[0], target_position[1], target_position[2]
+                target_position[0], target_position[1], target_position[2],
+                current_j_points=self.current_data.get('j_points'),
+                collision_data=collision_data  # Phase 1: Pass data structure
             )
             
             if result is None:

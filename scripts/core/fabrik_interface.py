@@ -30,7 +30,7 @@ class FABRIKInterface:
         """Check if FABRIK is initialized"""
         return self.initialized
     
-    def calculate_motors(self, target_x_m, target_y_m, target_z_m, current_j_points=None):
+    def calculate_motors(self, target_x_m, target_y_m, target_z_m, current_j_points=None, collision_data=None):
         """Calculate motor positions for target (input in meters, converts to mm internally)"""
         if not self.initialized:
             print("FABRIK not initialized")
@@ -42,19 +42,31 @@ class FABRIKInterface:
             target_y_mm = meters_to_mm(target_y_m)
             target_z_mm = meters_to_mm(target_z_m)
             
+            # Phase 1: Convert collision data to C++ format (Phase 2: C++ will use it)
+            cpp_collision_data = None
+            if collision_data:
+                cpp_collision_data = self._convert_collision_data_to_cpp_format(collision_data)
+            
             # Determine FABRIK method and execute
             if current_j_points and len(current_j_points) > 0:
                 fabrik_j_points = self._convert_j_points_to_fabrik_format(current_j_points)
                 if fabrik_j_points is not None:
-                    print(f"Target: ({target_x_mm:.1f}, {target_y_mm:.1f}, {target_z_mm:.1f})mm - FABRIK: From J points")
+                    collision_msg = " + collision data" if cpp_collision_data else ""
+                    print(f"Target: ({target_x_mm:.1f}, {target_y_mm:.1f}, {target_z_mm:.1f})mm - FABRIK: From J points{collision_msg}")
+                    
+                    # Note: Current C++ FABRIK doesn't accept J points parameter yet
+                    # For Phase 1, we'll use the basic 3-parameter version
+                    # Phase 2 will modify C++ to accept J points and collision data
                     result = self.delta_robot.motor.MotorModule.calculate_motors(
-                        target_x_mm, target_y_mm, target_z_mm, fabrik_j_points
+                        target_x_mm, target_y_mm, target_z_mm
                     )
                 else:
-                    print(f"Target: ({target_x_mm:.1f}, {target_y_mm:.1f}, {target_z_mm:.1f})mm - FABRIK: J points invalid, straight-up")
+                    collision_msg = " + collision data" if cpp_collision_data else ""
+                    print(f"Target: ({target_x_mm:.1f}, {target_y_mm:.1f}, {target_z_mm:.1f})mm - FABRIK: J points invalid, straight-up{collision_msg}")
                     result = self.delta_robot.motor.MotorModule.calculate_motors(target_x_mm, target_y_mm, target_z_mm)
             else:
-                print(f"Target: ({target_x_mm:.1f}, {target_y_mm:.1f}, {target_z_mm:.1f})mm - FABRIK: Straight-up")
+                collision_msg = " + collision data" if cpp_collision_data else ""
+                print(f"Target: ({target_x_mm:.1f}, {target_y_mm:.1f}, {target_z_mm:.1f})mm - FABRIK: Straight-up{collision_msg}")
                 result = self.delta_robot.motor.MotorModule.calculate_motors(target_x_mm, target_y_mm, target_z_mm)
             
             if result:
@@ -64,6 +76,104 @@ class FABRIKInterface:
             
         except Exception as e:
             print(f"Error calculating motors: {e}")
+            return None
+    
+    def _convert_collision_data_to_cpp_format(self, collision_data):
+        """Convert collision data to C++ compatible format with rotation support"""
+        try:
+            if not collision_data:
+                return None
+            
+            cpp_format = {
+                'spheres': [],
+                'sphere_count': collision_data.get('sphere_count', 0),
+                'boxes': [], 
+                'box_count': collision_data.get('box_count', 0),
+                'cylinders': [],
+                'cylinder_count': collision_data.get('cylinder_count', 0)
+            }
+            
+            # Convert sphere data
+            for sphere in collision_data.get('spheres', []):
+                cpp_sphere = {
+                    'center_x': float(sphere['center'][0]),  # mm
+                    'center_y': float(sphere['center'][1]),  # mm
+                    'center_z': float(sphere['center'][2]),  # mm
+                    'radius': float(sphere['radius']),       # mm
+                    # Rotation matrix as flat array (row-major order)
+                    'rotation_matrix': [
+                        float(sphere['rotation_matrix'][0][0]), float(sphere['rotation_matrix'][0][1]), float(sphere['rotation_matrix'][0][2]),
+                        float(sphere['rotation_matrix'][1][0]), float(sphere['rotation_matrix'][1][1]), float(sphere['rotation_matrix'][1][2]),
+                        float(sphere['rotation_matrix'][2][0]), float(sphere['rotation_matrix'][2][1]), float(sphere['rotation_matrix'][2][2])
+                    ],
+                    # Quaternion (x, y, z, w) - better for C++
+                    'quat_x': float(sphere['quaternion'][0]),
+                    'quat_y': float(sphere['quaternion'][1]),
+                    'quat_z': float(sphere['quaternion'][2]),
+                    'quat_w': float(sphere['quaternion'][3]),
+                    'is_uniform_scale': bool(sphere['is_uniform_scale'])
+                }
+                cpp_format['spheres'].append(cpp_sphere)
+            
+            # Convert box data (OBB support)
+            for box in collision_data.get('boxes', []):
+                cpp_box = {
+                    'center_x': float(box['center'][0]),     # mm
+                    'center_y': float(box['center'][1]),     # mm
+                    'center_z': float(box['center'][2]),     # mm
+                    'size_x': float(box['size'][0]),         # mm
+                    'size_y': float(box['size'][1]),         # mm
+                    'size_z': float(box['size'][2]),         # mm
+                    # Rotation matrix as flat array (row-major order)
+                    'rotation_matrix': [
+                        float(box['rotation_matrix'][0][0]), float(box['rotation_matrix'][0][1]), float(box['rotation_matrix'][0][2]),
+                        float(box['rotation_matrix'][1][0]), float(box['rotation_matrix'][1][1]), float(box['rotation_matrix'][1][2]),
+                        float(box['rotation_matrix'][2][0]), float(box['rotation_matrix'][2][1]), float(box['rotation_matrix'][2][2])
+                    ],
+                    # Quaternion (x, y, z, w) - better for C++
+                    'quat_x': float(box['quaternion'][0]),
+                    'quat_y': float(box['quaternion'][1]),
+                    'quat_z': float(box['quaternion'][2]),
+                    'quat_w': float(box['quaternion'][3]),
+                    'is_axis_aligned': bool(box['is_axis_aligned'])  # AABB vs OBB
+                }
+                cpp_format['boxes'].append(cpp_box)
+            
+            # Convert cylinder data
+            for cylinder in collision_data.get('cylinders', []):
+                cpp_cylinder = {
+                    'center_x': float(cylinder['center'][0]),  # mm
+                    'center_y': float(cylinder['center'][1]),  # mm
+                    'center_z': float(cylinder['center'][2]),  # mm
+                    'radius': float(cylinder['radius']),       # mm
+                    'height': float(cylinder['height']),       # mm
+                    # Rotation matrix as flat array (row-major order)
+                    'rotation_matrix': [
+                        float(cylinder['rotation_matrix'][0][0]), float(cylinder['rotation_matrix'][0][1]), float(cylinder['rotation_matrix'][0][2]),
+                        float(cylinder['rotation_matrix'][1][0]), float(cylinder['rotation_matrix'][1][1]), float(cylinder['rotation_matrix'][1][2]),
+                        float(cylinder['rotation_matrix'][2][0]), float(cylinder['rotation_matrix'][2][1]), float(cylinder['rotation_matrix'][2][2])
+                    ],
+                    # Quaternion (x, y, z, w) - better for C++
+                    'quat_x': float(cylinder['quaternion'][0]),
+                    'quat_y': float(cylinder['quaternion'][1]),
+                    'quat_z': float(cylinder['quaternion'][2]),
+                    'quat_w': float(cylinder['quaternion'][3]),
+                    'is_circular': bool(cylinder['is_circular']),
+                    'is_axis_aligned': bool(cylinder['is_axis_aligned'])
+                }
+                cpp_format['cylinders'].append(cpp_cylinder)
+            
+            total_objects = cpp_format['sphere_count'] + cpp_format['box_count'] + cpp_format['cylinder_count']
+            aabb_count = sum(1 for box in cpp_format['boxes'] if box['is_axis_aligned'])
+            obb_count = cpp_format['box_count'] - aabb_count
+            
+            print(f"Collision data formatted: {cpp_format['sphere_count']} spheres, "
+                  f"{aabb_count} AABB boxes, {obb_count} OBB boxes, "
+                  f"{cpp_format['cylinder_count']} cylinders ({total_objects} total)")
+            return cpp_format
+            
+        except Exception as e:
+            print(f"Error converting collision data: {e}")
             return None
     
     def _convert_j_points_to_fabrik_format(self, j_points):

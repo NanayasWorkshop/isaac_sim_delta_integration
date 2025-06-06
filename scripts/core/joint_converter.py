@@ -21,9 +21,7 @@ class JointConverter:
             # Convert to numpy array for calculations
             point_array = np.array([point[0], point[1], point[2]])
             self.points.append(point_array)
-            print(f"Added {name}: ({point[0]:.6f}, {point[1]:.6f}, {point[2]:.6f})")
         
-        print(f"Loaded {len(self.points)} P points from Isaac Sim")
         return len(self.points)
     
     def load_points_from_coordinates(self, coordinates):
@@ -36,9 +34,7 @@ class JointConverter:
         for i, (x, y, z) in enumerate(coordinates):
             point_array = np.array([x, y, z])
             self.points.append(point_array)
-            print(f"P{i+1}: ({x:.6f}, {y:.6f}, {z:.6f})")
         
-        print(f"Loaded {len(self.points)} P points")
         return len(self.points)
     
     def angle_between_vectors(self, v1, v2):
@@ -120,29 +116,22 @@ class JointConverter:
         Returns list of J point coordinates
         """
         if len(self.points) < 2:
-            print("Need at least 2 P points to calculate J points")
             return []
         
         self.joints = []
         
-        print(f"\n=== Calculating J points from {len(self.points)} P points ===")
-
         # ADD BASE JOINT J0 at origin (0,0,0) - FABRIK requirement
         base_joint = np.array([0.0, 0.0, 0.0])
         self.joints.append(base_joint)
-        print
         
         # Calculate (n-1) joints for n points using optimization
         for i in range(len(self.points) - 1):
             joint = self.optimize_joint(i)
-            print(f"J{i+1} position: ({joint[0]:.6f}, {joint[1]:.6f}, {joint[2]:.6f})")
         
         # Add final J point equal to last P point (end effector)
         final_j_point = self.points[-1].copy()  # J_n = P_n
         self.joints.append(final_j_point)
-        print(f"J{len(self.joints)} position: ({final_j_point[0]:.6f}, {final_j_point[1]:.6f}, {final_j_point[2]:.6f}) [= P{len(self.points)}]")
         
-        print(f"\nCalculated {len(self.joints)} J points (including end effector)")
         return self.joints.copy()
     
     def get_j_points_as_tuples(self):
@@ -151,15 +140,4 @@ class JointConverter:
     
     def print_p_and_j_summary(self):
         """Print summary of both P and J points"""
-        print(f"\n=== P and J Points Summary ===")
-        print(f"P points (Isaac Sim connection points): {len(self.points)}")
-        for i, p in enumerate(self.points):
-            print(f"  P{i+1}: ({p[0]:.6f}, {p[1]:.6f}, {p[2]:.6f})")
-        
-        print(f"\nJ points (Optimized joints): {len(self.joints)}")
-        for i, j in enumerate(self.joints):
-            if i == len(self.joints) - 1:
-                # Last J point equals last P point
-                print(f"  J{i+1}: ({j[0]:.6f}, {j[1]:.6f}, {j[2]:.6f}) [= P{len(self.points)}]")
-            else:
-                print(f"  J{i+1}: ({j[0]:.6f}, {j[1]:.6f}, {j[2]:.6f})")
+        print(f"P→J Conversion: {len(self.points)} P points → {len(self.joints)} J points")
